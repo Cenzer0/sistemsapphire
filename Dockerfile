@@ -15,4 +15,7 @@ RUN python train_model.py
 
 EXPOSE 5000
 
+ENV FLASK_ENV=production
+ENV PYTHONUNBUFFERED=1
+
 CMD ["python", "app.py"]

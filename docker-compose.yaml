@@ -1,11 +1,20 @@
-version: "3.9"
+version: "3.8"
 
 services:
   web:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: sapphire-prediksi
     ports:
       - "5000:5000"
     environment:
       - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
