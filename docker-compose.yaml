@@ -20,7 +20,7 @@ services:
       start_period: 40s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.sapphire.rule=Host(`shappirespk.cnzr.biz.id`)"
+      - "traefik.http.routers.sapphire.rule=Host(`sapphirespk.cnzr.biz.id `)"
       - "traefik.http.routers.sapphire.entrypoints=websecure"
       - "traefik.http.routers.sapphire.tls.certresolver=letsencrypt"
       - "traefik.http.services.sapphire.loadbalancer.server.port=5000"
