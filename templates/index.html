@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Prediksi Harga Rumah - Sapphire Residence Tegal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Prediksi Harga Rumah</h1>
+    <p class="page-subtitle">Estimasi harga KPR berdasarkan spesifikasi unit menggunakan model Artificial Neural Network dengan arsitektur Multi-Layer Perceptron.</p>
+</div>
+
+{% if error %}
+<div class="error-block">{{ error }}</div>
+{% endif %}
+
+<div class="row g-4">
+    <!-- FORM INPUT -->
+    <div class="col-lg-5">
+        <form action="/predict" method="post" id="form-prediksi">
+            <div class="card-panel">
+                <div class="card-panel-header">
+                    <span class="card-panel-title">Spesifikasi Unit</span>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label" for="nama_blok">Blok Kavling</label>
+                        <select name="nama_blok" id="nama_blok" class="form-select" required>
+                            <option value="" disabled {% if not input_user %}selected{% endif %}>Pilih blok unit</option>
+                            {% for blok in daftar_blok %}
+                            <option value="{{ blok }}" {% if input_user and input_user.nama_blok == blok %}selected{% endif %}>{{ blok }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-6">
+                        <label class="form-label" for="luas_bangunan">Luas Bangunan (m2)</label>
+                        <input type="number" name="luas_bangunan" id="luas_bangunan" class="form-control" placeholder="cth: 38" required value="{{ input_user.luas_bangunan if input_user else '' }}">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label" for="luas_tanah">Luas Tanah (m2)</label>
+                        <input type="number" name="luas_tanah" id="luas_tanah" class="form-control" placeholder="cth: 84" required value="{{ input_user.luas_tanah if input_user else '' }}">
+                    </div>
+
+                    <div class="col-6">
+                        <label class="form-label" for="kamar_tidur">Kamar Tidur</label>
+                        <input type="number" name="kamar_tidur" id="kamar_tidur" class="form-control" value="{{ input_user.kamar_tidur if input_user else '2' }}" required min="1">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label" for="kamar_mandi">Kamar Mandi</label>
+                        <input type="number" name="kamar_mandi" id="kamar_mandi" class="form-control" value="{{ input_user.kamar_mandi if input_user else '1' }}" required min="1">
+                    </div>
+
+                    <div class="col-6">
+                        <label class="form-label" for="posisi">Posisi Kavling</label>
+                        <select name="posisi" id="posisi" class="form-select">
+                            <option value="Standard" {% if input_user and input_user.posisi == 'Standard' %}selected{% endif %}>Standard</option>
+                            <option value="Main Road" {% if input_user and input_user.posisi == 'Main Road' %}selected{% endif %}>Main Road</option>
+                            <option value="Hook" {% if input_user and input_user.posisi == 'Hook' %}selected{% endif %}>Hook</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label" for="smart_lock">Smart Door Lock</label>
+                        <select name="smart_lock" id="smart_lock" class="form-select">
+                            <option value="1" {% if input_user and input_user.smart_lock == '1' %}selected{% endif %}>Ya</option>
+                            <option value="0" {% if input_user and input_user.smart_lock == '0' %}selected{% endif %}>Tidak</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-panel">
+                <div class="card-panel-header">
+                    <span class="card-panel-title">Analisis Kelayakan Kredit</span>
+                    <span class="card-panel-badge">DSR 30%</span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="gaji">Penghasilan Bulanan</label>
+                    <div class="input-group">
+                        <span class="input-group-text">Rp</span>
+                        <input type="number" name="gaji" id="gaji" class="form-control" placeholder="cth: 10000000" value="{{ input_user.gaji if input_user else '' }}">
+                    </div>
+                    <div class="form-hint">Digunakan untuk menghitung rasio hutang (Debt Service Ratio) dengan ambang batas 30%.</div>
+                </div>
+            </div>
+
+            <div class="card-panel">
+                <div class="card-panel-header">
+                    <span class="card-panel-title">Algoritma Optimizer</span>
+                    <span class="card-panel-badge">ANN</span>
+                </div>
+
+                <div class="row g-2">
+                    <div class="col-12">
+                        <label class="form-label" for="optimizer">Pilih Optimizer</label>
+                        <select name="optimizer" id="optimizer" class="form-select">
+                            <option value="lbfgs" {% if input_user and input_user.optimizer == 'lbfgs' %}selected{% endif %}>LBFGS -- Akurasi Tertinggi</option>
+                            <option value="adam" {% if input_user and input_user.optimizer == 'adam' %}selected{% endif %}>ADAM -- Adaptive Moment</option>
+                            <option value="sgd" {% if input_user and input_user.optimizer == 'sgd' %}selected{% endif %}>SGD -- Stochastic Gradient</option>
+                        </select>
+                        <div class="form-hint">LBFGS direkomendasikan untuk dataset berukuran kecil hingga menengah.</div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-primary-custom" id="btn-predict">
+                <i class="bi bi-cpu"></i>
+                Hitung Prediksi
+            </button>
+        </form>
+    </div>
+
+    <!-- HASIL PREDIKSI -->
+    <div class="col-lg-7">
+        {% if hasil_harga %}
+
+        <!-- Harga Prediksi -->
+        <div class="result-block">
+            <div class="result-header">
+                <div class="result-label">Estimasi Harga KPR</div>
+                <div class="result-price">Rp {{ hasil_harga }}</div>
+                <div class="result-note">Prediksi menggunakan optimizer {{ optimizer_nama }} &mdash; Sapphire Residence Tegal</div>
+            </div>
+            <div class="result-body">
+                <div class="row g-3">
+                    <div class="col-6 col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-label">R2 Score</div>
+                            <div class="stat-value value-success text-mono">{{ "%.4f"|format(metrik.r2) if metrik.r2 is defined else 'N/A' }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-label">MAPE</div>
+                            <div class="stat-value value-primary text-mono">{{ "%.4f"|format(metrik.mape) if metrik.mape is defined else 'N/A' }}%</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-label">MAE</div>
+                            <div class="stat-value text-mono fs-sm">Rp {{ "{:,.0f}".format(metrik.mae)|replace(",", ".") if metrik.mae is defined else 'N/A' }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-label">RMSE</div>
+                            <div class="stat-value text-mono fs-sm">Rp {{ "{:,.0f}".format(metrik.rmse)|replace(",", ".") if metrik.rmse is defined else 'N/A' }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Simulasi KPR -->
+        <div class="card-panel">
+            <div class="card-panel-header">
+                <span class="card-panel-title">Simulasi Kredit Pemilikan Rumah (KPR)</span>
+                <span class="card-panel-badge">Bunga {{ bunga }}%/thn</span>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-label">Uang Muka (DP {{ dp_persen }}%)</div>
+                        <div class="stat-value fs-sm">Rp {{ dp }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-label">Plafon Kredit</div>
+                        <div class="stat-value fs-sm">Rp {{ plafon }}</div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-label">Status Kelayakan</div>
+                        <div class="mt-1">
+                            <span class="status-badge badge-{{ status_utama.kelas }}">{{ status_utama.status }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-4">
+                    <div class="tenor-card">
+                        <div class="tenor-label">Tenor 10 Tahun</div>
+                        <div class="tenor-value">Rp {{ cicilan_10 }}</div>
+                        <div class="tenor-sub">per bulan</div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="tenor-card">
+                        <div class="tenor-label">Tenor 15 Tahun</div>
+                        <div class="tenor-value">Rp {{ cicilan_15 }}</div>
+                        <div class="tenor-sub">per bulan</div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="tenor-card">
+                        <div class="tenor-label">Tenor 20 Tahun</div>
+                        <div class="tenor-value">Rp {{ cicilan_20 }}</div>
+                        <div class="tenor-sub">per bulan</div>
+                    </div>
+                </div>
+            </div>
+
+            {% if status_utama.saran %}
+            <div class="dsr-info dsr-{{ status_utama.kelas }}">
+                {{ status_utama.saran }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Tombol Export -->
+        <div class="row g-3 no-print">
+            <div class="col-6">
+                <form action="/export/prediksi" method="post">
+                    <input type="hidden" name="blok" value="{{ input_user.nama_blok }}">
+                    <input type="hidden" name="lb" value="{{ input_user.luas_bangunan }}">
+                    <input type="hidden" name="lt" value="{{ input_user.luas_tanah }}">
+                    <input type="hidden" name="kt" value="{{ input_user.kamar_tidur }}">
+                    <input type="hidden" name="km" value="{{ input_user.kamar_mandi }}">
+                    <input type="hidden" name="posisi" value="{{ input_user.posisi }}">
+                    <input type="hidden" name="sdl" value="{{ input_user.smart_lock }}">
+                    <input type="hidden" name="optimizer" value="{{ optimizer_nama }}">
+                    <input type="hidden" name="harga" value="{{ hasil_harga }}">
+                    <input type="hidden" name="dp" value="{{ dp }}">
+                    <input type="hidden" name="plafon" value="{{ plafon }}">
+                    <input type="hidden" name="cicilan_10" value="{{ cicilan_10 }}">
+                    <input type="hidden" name="cicilan_15" value="{{ cicilan_15 }}">
+                    <input type="hidden" name="cicilan_20" value="{{ cicilan_20 }}">
+                    <input type="hidden" name="gaji" value="{{ input_user.gaji }}">
+                    <input type="hidden" name="dsr_status" value="{{ status_utama.status }}">
+                    <input type="hidden" name="dsr_rasio" value="{{ status_utama.rasio }}">
+                    <button type="submit" class="btn-primary-custom" style="background: #0d7c66;">
+                        <i class="bi bi-file-earmark-spreadsheet"></i>
+                        Export Excel
+                    </button>
+                </form>
+            </div>
+            <div class="col-6">
+                <button onclick="window.print()" class="btn-outline-custom">
+                    <i class="bi bi-printer"></i>
+                    Cetak PDF
+                </button>
+            </div>
+        </div>
+
+        {% else %}
+        <!-- STATE KOSONG -->
+        <div class="card-panel" style="padding: 60px 24px; text-align: center;">
+            <i class="bi bi-house" style="font-size: 48px; color: var(--color-text-muted); display: block; margin-bottom: 16px;"></i>
+            <h3 style="color: var(--color-text-secondary); font-weight: 700; margin-bottom: 8px;">Hasil Prediksi</h3>
+            <p style="color: var(--color-text-muted); font-size: 13.5px; max-width: 360px; margin: 0 auto;">
+                Isi form spesifikasi unit di sebelah kiri, kemudian tekan tombol "Hitung Prediksi" untuk melihat estimasi harga dan analisis kelayakan kredit.
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

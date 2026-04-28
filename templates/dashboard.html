@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block title %}Perbandingan Model - Sapphire Residence Tegal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Perbandingan Performa Optimizer</h1>
+    <p class="page-subtitle">Evaluasi dan perbandingan tiga algoritma optimasi (Adam, SGD, LBFGS) pada model ANN dengan arsitektur {{ arsitektur.hidden_layers|join(' - ') if arsitektur.hidden_layers else '64 - 32 - 16' }}.</p>
+</div>
+
+<!-- RINGKASAN ARSITEKTUR -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="stat-label">Arsitektur</div>
+            <div class="stat-value text-mono fs-sm">{{ arsitektur.hidden_layers|join('-') if arsitektur.hidden_layers else '64-32-16' }}</div>
+            <div class="stat-sub">Hidden Layers</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="stat-label">Fitur Input</div>
+            <div class="stat-value">{{ arsitektur.input_layer if arsitektur.input_layer else '7' }}</div>
+            <div class="stat-sub">Variabel</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="stat-label">Data Training</div>
+            <div class="stat-value">{{ split_data.training if split_data.training else '451' }}</div>
+            <div class="stat-sub">{{ split_data.ratio if split_data.ratio else '80:20' }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card">
+            <div class="stat-label">Optimizer Terbaik</div>
+            <div class="stat-value value-success">{{ optimizer_terbaik }}</div>
+            <div class="stat-sub">R2 = {{ "%.6f"|format(metrik[optimizer_terbaik].r2) if metrik.get(optimizer_terbaik) else 'N/A' }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- TABEL PERBANDINGAN -->
+<div class="card-panel">
+    <div class="card-panel-header">
+        <span class="card-panel-title">Tabel Perbandingan Metrik Evaluasi</span>
+        <span class="card-panel-badge">3 Optimizer</span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table-custom">
+            <thead>
+                <tr>
+                    <th>Optimizer</th>
+                    <th class="cell-right">R2 Score</th>
+                    <th class="cell-right">MAE (Rp)</th>
+                    <th class="cell-right">RMSE (Rp)</th>
+                    <th class="cell-right">MAPE (%)</th>
+                    <th class="cell-right">Akurasi (%)</th>
+                    <th class="cell-right">Iterasi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for opt_name, m in metrik.items() %}
+                <tr {% if opt_name == optimizer_terbaik %}class="metric-highlight"{% endif %}>
+                    <td>
+                        <span class="optimizer-tag tag-{{ opt_name|lower }}">{{ opt_name }}</span>
+                        {% if opt_name == optimizer_terbaik %}
+                        <span class="status-badge badge-success ms-2" style="font-size: 10px;">Terbaik</span>
+                        {% endif %}
+                    </td>
+                    <td class="cell-right cell-mono">{{ "%.6f"|format(m.r2) }}</td>
+                    <td class="cell-right cell-mono">{{ "{:,.0f}".format(m.mae)|replace(",", ".") }}</td>
+                    <td class="cell-right cell-mono">{{ "{:,.0f}".format(m.rmse)|replace(",", ".") }}</td>
+                    <td class="cell-right cell-mono">{{ "%.4f"|format(m.mape) }}</td>
+                    <td class="cell-right cell-mono">{{ "%.4f"|format(m.akurasi) }}</td>
+                    <td class="cell-right cell-mono">{{ m.n_iter }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- GRAFIK -->
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card-panel">
+            <div class="card-panel-header">
+                <span class="card-panel-title">R2 Score per Optimizer</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="chartR2" height="260"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card-panel">
+            <div class="card-panel-header">
+                <span class="card-panel-title">MAE per Optimizer (Rp)</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="chartMAE" height="260"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-0">
+    <div class="col-lg-6">
+        <div class="card-panel">
+            <div class="card-panel-header">
+                <span class="card-panel-title">MAPE per Optimizer (%)</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="chartMAPE" height="260"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card-panel">
+            <div class="card-panel-header">
+                <span class="card-panel-title">Loss Curve (Training)</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="chartLoss" height="260"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- KESIMPULAN -->
+<div class="card-panel">
+    <div class="card-panel-header">
+        <span class="card-panel-title">Kesimpulan Perbandingan</span>
+    </div>
+    <div style="font-size: 13.5px; line-height: 1.8; color: var(--color-text-secondary);">
+        <p>Berdasarkan hasil evaluasi terhadap tiga algoritma optimizer yang diuji pada model ANN dengan arsitektur
+        <strong class="text-mono" style="color: var(--color-text);">{{ arsitektur.hidden_layers|join('-') if arsitektur.hidden_layers else '64-32-16' }}</strong>,
+        optimizer <strong style="color: var(--color-accent);">{{ optimizer_terbaik }}</strong> menunjukkan performa terbaik dengan nilai
+        R2 Score sebesar <strong class="text-mono" style="color: var(--color-text);">{{ "%.6f"|format(metrik[optimizer_terbaik].r2) if metrik.get(optimizer_terbaik) else 'N/A' }}</strong>
+        dan tingkat kesalahan rata-rata (MAE) sebesar
+        <strong class="text-mono" style="color: var(--color-text);">Rp {{ "{:,.0f}".format(metrik[optimizer_terbaik].mae)|replace(",", ".") if metrik.get(optimizer_terbaik) else 'N/A' }}</strong>.</p>
+
+        <p>Hasil ini menunjukkan bahwa model mampu memprediksi harga KPR rumah di Sapphire Residence Tegal
+        dengan tingkat akurasi yang sangat tinggi, sehingga layak digunakan sebagai dasar dalam sistem pendukung pengambilan keputusan
+        bagi calon pembeli maupun pihak pengembang.</p>
+    </div>
+</div>
+
+<!-- Tombol Export -->
+<div class="row g-3 no-print">
+    <div class="col-6">
+        <a href="/export/dashboard" class="btn-primary-custom" style="background: #0d7c66; text-decoration: none;">
+            <i class="bi bi-file-earmark-spreadsheet"></i>
+            Export Excel
+        </a>
+    </div>
+    <div class="col-6">
+        <button onclick="window.print()" class="btn-outline-custom">
+            <i class="bi bi-printer"></i>
+            Cetak PDF
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const metrikData = {{ metrik|tojson }};
+
+    const labels = Object.keys(metrikData);
+    const colorMap = {
+        'ADAM': { bg: 'rgba(124, 58, 237, 0.75)', border: '#7c3aed' },
+        'SGD': { bg: 'rgba(245, 158, 11, 0.75)', border: '#f59e0b' },
+        'LBFGS': { bg: 'rgba(16, 185, 129, 0.75)', border: '#10b981' }
+    };
+
+    const bgColors = labels.map(l => (colorMap[l] || { bg: '#6b7280' }).bg);
+    const borderColors = labels.map(l => (colorMap[l] || { border: '#6b7280' }).border);
+
+    const baseOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: '#1a1d23',
+                titleFont: { family: "'Plus Jakarta Sans'", size: 12, weight: '600' },
+                bodyFont: { family: "'JetBrains Mono'", size: 12 },
+                padding: 10,
+                cornerRadius: 6
+            }
+        },
+        scales: {
+            x: {
+                grid: { display: false },
+                ticks: { font: { family: "'Plus Jakarta Sans'", size: 12, weight: '600' } }
+            },
+            y: {
+                grid: { color: '#f0f1f3' },
+                ticks: { font: { family: "'JetBrains Mono'", size: 11 } }
+            }
+        }
+    };
+
+    // R2 Chart
+    const r2Values = labels.map(l => {
+        const v = metrikData[l].r2;
+        return v < 0 ? 0 : v;
+    });
+    new Chart(document.getElementById('chartR2'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: r2Values,
+                backgroundColor: bgColors,
+                borderColor: borderColors,
+                borderWidth: 1.5,
+                borderRadius: 6,
+                barPercentage: 0.5
+            }]
+        },
+        options: {
+            ...baseOptions,
+            scales: {
+                ...baseOptions.scales,
+                y: { ...baseOptions.scales.y, min: 0, max: 1.05 }
+            }
+        }
+    });
+
+    // MAE Chart - only positive-performing optimizers
+    const maeValues = labels.map(l => metrikData[l].mae);
+    const validMAE = maeValues.filter(v => v < 100000000);
+    const maxMAE = validMAE.length > 0 ? Math.max(...validMAE) * 1.3 : undefined;
+
+    new Chart(document.getElementById('chartMAE'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: maeValues.map(v => v > 100000000 ? maxMAE || v : v),
+                backgroundColor: bgColors,
+                borderColor: borderColors,
+                borderWidth: 1.5,
+                borderRadius: 6,
+                barPercentage: 0.5
+            }]
+        },
+        options: baseOptions
+    });
+
+    // MAPE Chart
+    const mapeValues = labels.map(l => {
+        const v = metrikData[l].mape;
+        return v > 100 ? 100 : v;
+    });
+    new Chart(document.getElementById('chartMAPE'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: mapeValues,
+                backgroundColor: bgColors,
+                borderColor: borderColors,
+                borderWidth: 1.5,
+                borderRadius: 6,
+                barPercentage: 0.5
+            }]
+        },
+        options: baseOptions
+    });
+
+    // Loss Curve Chart
+    const lossDatasets = [];
+    const lossColorList = ['#7c3aed', '#f59e0b', '#10b981'];
+    let idx = 0;
+    for (const [name, data] of Object.entries(metrikData)) {
+        if (data.loss_curve && data.loss_curve.length > 0) {
+            lossDatasets.push({
+                label: name,
+                data: data.loss_curve,
+                borderColor: lossColorList[idx % 3],
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.3
+            });
+        }
+        idx++;
+    }
+
+    if (lossDatasets.length > 0) {
+        const maxLen = Math.max(...lossDatasets.map(d => d.data.length));
+        new Chart(document.getElementById('chartLoss'), {
+            type: 'line',
+            data: {
+                labels: Array.from({length: maxLen}, (_, i) => i + 1),
+                datasets: lossDatasets
+            },
+            options: {
+                ...baseOptions,
+                plugins: {
+                    ...baseOptions.plugins,
+                    legend: {
+                        display: true,
+                        labels: {
+                            font: { family: "'Plus Jakarta Sans'", size: 12, weight: '600' },
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            padding: 16
+                        }
+                    }
+                },
+                scales: {
+                    ...baseOptions.scales,
+                    x: {
+                        ...baseOptions.scales.x,
+                        title: { display: true, text: 'Epoch', font: { family: "'Plus Jakarta Sans'", size: 12 } }
+                    },
+                    y: {
+                        ...baseOptions.scales.y,
+                        title: { display: true, text: 'Loss', font: { family: "'Plus Jakarta Sans'", size: 12 } }
+                    }
+                }
+            }
+        });
+    } else {
+        document.getElementById('chartLoss').parentElement.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;font-size:13px;">Loss curve hanya tersedia untuk optimizer Adam dan SGD.</div>';
+    }
+</script>
+{% endblock %}
